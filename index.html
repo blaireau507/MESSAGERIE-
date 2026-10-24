@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Tchat Privé - Homme & KH</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: #1e293b; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    h2 { margin-top: 0; color: #38bdf8; text-align: center; }
+    label { display: block; margin-top: 12px; font-weight: bold; color: #94a3b8; font-size: 0.9em; }
+    input[type="text"], input[type="password"], select, textarea { width: 100%; padding: 10px; margin-top: 5px; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 5px; box-sizing: border-box; }
+    button { width: 100%; padding: 12px; margin-top: 12px; background: #2563eb; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    #chat-box { height: 260px; overflow-y: auto; background: #0f172a; border: 1px solid #475569; border-radius: 5px; padding: 10px; margin-top: 15px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { padding: 8px 12px; border-radius: 6px; max-width: 85%; font-size: 0.95em; word-wrap: break-word; }
+    .msg-Homme { background: #2563eb; align-self: flex-end; }
+    .msg-KH { background: #334155; align-self: flex-start; }
+    .msg-IA { background: #059669; align-self: flex-start; }
+    .checkbox-container { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .checkbox-container input { width: auto; margin: 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Tchat Privé (Homme / KH)</h2>
+
+  <label for="mon-role">1. Vous envoyez en tant que :</label>
+  <select id="mon-role">
+    <option value="Homme">Homme</option>
+    <option value="KH">KH</option>
+  </select>
+
+  <label for="ma-cle">2. Clé API Gemini :</label>
+  <input type="password" id="ma-cle" placeholder="Collez votre clé API ici ou définissez-la dans le script">
+
+  <label for="mon-prompt">3. Prompt Système IA :</label>
+  <input type="text" id="mon-prompt" value="Tu réponds sous le nom de KH (IA). Sois concis et bienveillant.">
+
+  <div class="checkbox-container">
+    <input type="checkbox" id="ia-active" checked>
+    <label for="ia-active" style="margin:0; cursor:pointer; color:white;">Activer la réponse automatique de l'IA quand "Homme" parle</label>
+  </div>
+
+  <hr style="margin-top:20px; border-color:#334155;">
+
+  <div id="chat-box"></div>
+
+  <label for="mon-message">Nouveau message :</label>
+  <input type="text" id="mon-message" placeholder="Écrivez votre message ici..." onkeypress="if(event.key==='Enter') envoyer()">
+  <button onclick="envoyer()">Envoyer le message</button>
+</div>
+
+<script>
+  // Colle ta clé entre les guillemets si tu veux l'enregistrer dans le fichier
+  const CLE_API_PAR_DEFAUT = ""; 
+
+  window.onload = function() {
+    let cleChamp = document.getElementById("ma-cle");
+    if (CLE_API_PAR_DEFAUT !== "") {
+      cleChamp.value = CLE_API_PAR_DEFAUT;
+    } else if (localStorage.getItem("sauve_cle")) {
+      cleChamp.value = localStorage.getItem("sauve_cle");
+    }
+    afficherMessages();
+  };
+
+  function afficherMessages() {
+    let msgs = JSON.parse(localStorage.getItem("tchat_historique") || "[]");
+    let log = document.getElementById("chat-box");
+    log.innerHTML = "";
+    msgs.forEach(m => {
+      let d = document.createElement("div");
+      d.className = "msg msg-" + m.role;
+      d.innerHTML = "<strong>" + m.auteur + " :</strong> " + m.texte;
+      log.appendChild(d);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function envoyer() {
+    let champMsg = document.getElementById("mon-message");
+    let texte = champMsg.value.trim();
+    if (!texte) return;
+
+    let role = document.getElementById("mon-role").value;
+    let msgs = JSON.parse(localStorage.getItem("tchat_historique") || "[]");
+    
+    msgs.push({ role: role, auteur: role, texte: texte });
+    localStorage.setItem("tchat_historique", JSON.stringify(msgs));
+    champMsg.value = "";
+    afficherMessages();
+
+    let cle = document.getElementById("ma-cle").value.trim() || CLE_API_PAR_DEFAUT;
+    let iaActive = document.getElementById("ia-active").checked;
+
+    if (cle !== "") {
+      localStorage.setItem("sauve_cle", cle);
+    }
+
+    if (role === "Homme" && iaActive) {
+      if (!cle) {
+        alert("Attention : Aucune clé API Gemini n'a été trouvée.");
+        return;
+      }
+      let promptSys = document.getElementById("mon-prompt").value;
+      await appelerGemini(texte, cle, promptSys);
+    }
+  }
+
+  async function appelerGemini(promptUser, apiKey, systemPrompt) {
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + apiKey;
+    try {
+      let res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: promptUser }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        })
+      });
+      let data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Erreur de connexion à l'API Gemini.");
+      }
+      let reponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (reponse) {
+        let msgs = JSON.parse(localStorage.getItem("tchat_historique") || "[]");
+        msgs.push({ role: "IA", auteur: "KH (IA)", texte: reponse.trim() });
+        localStorage.setItem("tchat_historique", JSON.stringify(msgs));
+        afficherMessages();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erreur API Gemini : " + e.message);
+    }
+  }
+</script>
+
+</body>
+</html>
