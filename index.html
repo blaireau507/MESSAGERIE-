@@ -904,3 +904,55 @@
         function spinWheel() {
             if(isSpinning) return;
             isSpinning = true;
+            document.getElementById("send-wheel-btn").disabled = true;
+            document.getElementById("wheel-result").innerText = "";
+
+            const numSegments = state.wheelOptions.length;
+            const randomSpin = Math.floor(Math.random() * 3000) + 3000;
+            const targetAngle = wheelAngle + randomSpin;
+            
+            let startTime = null;
+            const duration = 3000;
+
+            function animateSpin(currentTime) {
+                if(!startTime) startTime = currentTime;
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                const ease = 1 - Math.pow(1 - progress, 3);
+                wheelAngle = wheelAngle + (targetAngle - wheelAngle) * ease;
+                drawWheel();
+
+                if(progress < 1) {
+                    requestAnimationFrame(animateSpin);
+                } else {
+                    isSpinning = false;
+                    const arc = (2 * Math.PI) / numSegments;
+                    const normalizedAngle = (2 * Math.PI - (wheelAngle % (2 * Math.PI))) % (2 * Math.PI);
+                    const winningIndex = Math.floor(normalizedAngle / arc) % numSegments;
+                    lastSelectedOption = state.wheelOptions[winningIndex];
+                    
+                    document.getElementById("wheel-result").innerText = `Résultat : ${lastSelectedOption}`;
+                    document.getElementById("send-wheel-btn").disabled = false;
+                }
+            }
+            requestAnimationFrame(animateSpin);
+        }
+
+        function sendWheelResultToChat() {
+            if(!lastSelectedOption) return;
+            state.messages.push({ role: 'system', text: `🎡 Résultat de la roue de la chance : ${lastSelectedOption}` });
+            saveState();
+            renderMessages();
+            closeWheelModal();
+        }
+
+        document.getElementById("user-input").addEventListener("keydown", function(e) {
+            if(e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
