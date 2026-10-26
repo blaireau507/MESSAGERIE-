@@ -220,19 +220,35 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             cursor: pointer;
         }
-        .wheel-options-list {
+        .options-list {
             display: flex;
             flex-direction: column;
             gap: 5px;
             width: 100%;
-            max-height: 150px;
+            max-height: 140px;
             overflow-y: auto;
         }
-        .wheel-option-row {
+        .option-row {
             display: flex;
             gap: 5px;
         }
-        .wheel-option-row input { flex: 1; padding: 5px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .option-row input { flex: 1; padding: 5px; border: 1px solid var(--border-color); border-radius: 4px; }
+
+        /* Style carte mystère */
+        .card-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
     </style>
 </head>
 <body>
@@ -245,7 +261,8 @@
         <div class="tools-bar">
             <button class="tool-btn" onclick="openCageModal()">⏳ Chrono : <span id="cage-timer-label">00:00:00</span></button>
             <button class="tool-btn" onclick="openWheelModal()">🎡 Roue</button>
-            <button class="tool-btn" onclick="openNamesModal()">✏️ Noms & Rôles</button>
+            <button class="tool-btn" onclick="openCardsModal()">🃏 Cartes</button>
+            <button class="tool-btn" onclick="openNamesModal()">✏️ Noms</button>
             <button class="tool-btn danger-btn" onclick="clearChat()">🗑️ Effacer</button>
             <button class="tool-btn" onclick="openAdminModal()">⚙️ Config</button>
         </div>
@@ -260,7 +277,30 @@
         </div>
     </div>
 
-    <!-- Modal Configuration Noms et KH / KH Virtuelle -->
+    <!-- Modal Cartes Mystères (12 cartes) -->
+    <div id="cards-modal" class="modal">
+        <div class="modal-content">
+            <h3>Jeu des Cartes Mystères</h3>
+            <div class="card-box" id="card-display-box">Clique sur "Piocher une carte" !</div>
+            <button class="tool-btn" onclick="drawCard()" style="background-color: var(--primary-color); color: white; justify-content: center; padding: 10px; font-weight: bold;">Piocher une carte mystère 🎴</button>
+            
+            <details style="width: 100%; margin-top: 5px;">
+                <summary style="cursor: pointer; font-size: 0.85rem; color: #666;">Modifier les 12 cartes du paquet</summary>
+                <div class="options-list" id="cards-editor-list" style="margin-top: 10px;"></div>
+                <div style="display: flex; gap: 5px; margin-top: 8px;">
+                    <input type="text" id="new-card-item" placeholder="Nouvelle carte..." style="flex:1; padding:5px; border:1px solid var(--border-color); border-radius:4px;">
+                    <button class="tool-btn" onclick="addCardItem()">Ajouter</button>
+                </div>
+            </details>
+
+            <div class="modal-actions" style="margin-top: 15px; justify-content: space-between;">
+                <button class="tool-btn" onclick="sendCardResultToChat()" id="send-card-btn" disabled style="opacity: 0.5;">Insérer dans le chat</button>
+                <button class="tool-btn" onclick="closeCardsModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configuration Noms -->
     <div id="names-modal" class="modal">
         <div class="modal-content">
             <h3>Configuration des Noms & Statut</h3>
@@ -275,7 +315,6 @@
                     <input type="checkbox" id="virtual-kh-checkbox" style="width: 18px; height: 18px;">
                     Activer le mode "KH Virtuelle"
                 </label>
-                <p style="font-size: 0.8rem; color: #666; margin: 5px 0 0 28px;">Permet de basculer l'affichage et le comportement sur la variante virtuelle.</p>
             </div>
             
             <div class="modal-actions" style="margin-top: 15px;">
@@ -331,7 +370,7 @@
             
             <details style="width: 100%;">
                 <summary style="cursor: pointer; font-size: 0.85rem; color: #666;">Modifier les options</summary>
-                <div class="wheel-options-list" id="wheel-options-editor" style="margin-top: 10px;"></div>
+                <div class="options-list" id="wheel-options-editor" style="margin-top: 10px;"></div>
                 <div style="display: flex; gap: 5px; margin-top: 8px;">
                     <input type="text" id="new-wheel-item" placeholder="Nouvelle option..." style="flex:1; padding:5px; border:1px solid var(--border-color); border-radius:4px;">
                     <button class="tool-btn" onclick="addWheelOption()">Ajouter</button>
@@ -346,8 +385,8 @@
     </div>
 
     <script>
-        // Configuration & État
-        const STORAGE_KEY = "messagerie_app_state_v5";
+        // Configuration & État avec 12 cartes par défaut
+        const STORAGE_KEY = "messagerie_app_state_v6";
         let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
             messages: [],
             systemPrompt: "Tu es KH, un assistant personnel et confidentiel.",
@@ -355,7 +394,21 @@
             nameKh: "KH",
             isVirtualKh: false,
             apiKey: "",
-            wheelOptions: ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"]
+            wheelOptions: ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"],
+            cards: [
+                "Gage : +30 min de cage supplémentaire",
+                "Récompense : Pause de cage de 15 min",
+                "Défi : Envoyer une photo de validation",
+                "Immunité totale pour les prochaines 2h",
+                "Gage : Écrire 3 lignes de soumission",
+                "Récompense : Douceur accordée par KH",
+                "Défi : Rester silencieux 10 minutes",
+                "Gage : Doubler le temps de verrouillage",
+                "Récompense : Libération anticipée de 5 min",
+                "Défi : Répondre uniquement par 'Oui' ou 'Non'",
+                "Gage : Photo de la clé cachée",
+                "Récompense : Carte Joker offerte"
+            ]
         };
 
         let cageState = JSON.parse(localStorage.getItem("cage_timer_v1")) || {
@@ -363,6 +416,8 @@
             isRunning: false,
             lastTimestamp: Date.now()
         };
+
+        let lastDrawnCard = "";
 
         // Horloge globale
         setInterval(() => {
@@ -412,6 +467,7 @@
             document.getElementById("virtual-kh-checkbox").checked = !!state.isVirtualKh;
             updateCageDisplay();
             setupWheel();
+            setupCardsEditor();
         };
 
         function renderMessages() {
@@ -517,6 +573,64 @@
             }
         }
 
+        // Logique Cartes Mystères
+        function openCardsModal() { document.getElementById("cards-modal").style.display = "flex"; setupCardsEditor(); }
+        function closeCardsModal() { document.getElementById("cards-modal").style.display = "none"; }
+
+        function setupCardsEditor() {
+            const container = document.getElementById("cards-editor-list");
+            if(!container) return;
+            container.innerHTML = "";
+            state.cards.forEach((card, index) => {
+                const row = document.createElement("div");
+                row.className = "option-row";
+                row.innerHTML = `
+                    <input type="text" value="${card}" onchange="updateCardItem(${index}, this.value)">
+                    <button class="tool-btn danger-btn" onclick="removeCardItem(${index})">X</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function updateCardItem(index, val) { state.cards[index] = val; saveState(); }
+        function removeCardItem(index) {
+            if(state.cards.length > 2) {
+                state.cards.splice(index, 1);
+                saveState();
+                setupCardsEditor();
+            } else {
+                alert("Il faut au moins 2 cartes dans le paquet.");
+            }
+        }
+        function addCardItem() {
+            const input = document.getElementById("new-card-item");
+            if(input.value.trim()) {
+                state.cards.push(input.value.trim());
+                input.value = "";
+                saveState();
+                setupCardsEditor();
+            }
+        }
+
+        function drawCard() {
+            if(!state.cards || state.cards.length === 0) return;
+            const randomIndex = Math.floor(Math.random() * state.cards.length);
+            lastDrawnCard = state.cards[randomIndex];
+            
+            const displayBox = document.getElementById("card-display-box");
+            displayBox.innerText = lastDrawnCard;
+            document.getElementById("send-card-btn").disabled = false;
+            document.getElementById("send-card-btn").style.opacity = "1";
+        }
+
+        function sendCardResultToChat() {
+            if(!lastDrawnCard) return;
+            state.messages.push({ role: 'system', text: `🃏 Carte Mystère tirée : ${lastDrawnCard}` });
+            saveState();
+            renderMessages();
+            closeCardsModal();
+        }
+
         // Modals Gestion
         function openNamesModal() { document.getElementById("names-modal").style.display = "flex"; }
         function closeNamesModal() { document.getElementById("names-modal").style.display = "none"; }
@@ -553,10 +667,11 @@
 
         function renderWheelOptionsEditor() {
             const container = document.getElementById("wheel-options-editor");
+            if(!container) return;
             container.innerHTML = "";
             state.wheelOptions.forEach((opt, index) => {
                 const row = document.createElement("div");
-                row.className = "wheel-option-row";
+                row.className = "option-row";
                 row.innerHTML = `
                     <input type="text" value="${opt}" onchange="updateWheelOption(${index}, this.value)">
                     <button class="tool-btn danger-btn" onclick="removeWheelOption(${index})">X</button>
