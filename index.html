@@ -198,7 +198,7 @@
             overflow-y: auto;
         }
         .modal-content h3 { margin-top: 0; }
-        .modal-content textarea { width: 100%; height: 150px; }
+        .modal-content textarea { width: 100%; height: 120px; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
         /* Roue de la fortune style */
@@ -236,10 +236,11 @@
             <span>💬 Messagerie Privée</span>
         </div>
         <div class="tools-bar">
-            <button class="tool-btn" onclick="openCageModal()">⏳ Chrono Cage : <span id="cage-timer-label">00:00:00</span></button>
+            <button class="tool-btn" onclick="openCageModal()">⏳ Chrono : <span id="cage-timer-label">00:00:00</span></button>
             <button class="tool-btn" onclick="openWheelModal()">🎡 Roue</button>
+            <button class="tool-btn" onclick="openNamesModal()">✏️ Noms</button>
             <button class="tool-btn danger-btn" onclick="clearChat()">🗑️ Effacer</button>
-            <button class="tool-btn" id="admin-btn" onclick="openAdminModal()" style="display:none;">⚙️ Config KH</button>
+            <button class="tool-btn" onclick="openAdminModal()">⚙️ Config</button>
         </div>
     </header>
 
@@ -252,11 +253,27 @@
         </div>
     </div>
 
-    <!-- Modal Admin KH -->
+    <!-- Modal Configuration Noms -->
+    <div id="names-modal" class="modal">
+        <div class="modal-content">
+            <h3>Personnaliser les Noms</h3>
+            <label>Nom pour votre profil (droite) :</label>
+            <input type="text" id="name-homme-input" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; width: 100%;">
+            
+            <label style="margin-top: 10px;">Nom pour l'IA (gauche) :</label>
+            <input type="text" id="name-kh-input" style="padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; width: 100%;">
+            
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="tool-btn" onclick="closeNamesModal()">Annuler</button>
+                <button class="tool-btn" style="background-color: var(--primary-color); color:white;" onclick="saveNames()">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Admin / Prompt -->
     <div id="admin-modal" class="modal">
         <div class="modal-content">
-            <h3>Configuration de l'IA (Réservé à KH)</h3>
-            <label>Instructions système (Prompt) :</label>
+            <h3>Instructions système (Prompt de l'IA)</h3>
             <textarea id="admin-prompt-input"></textarea>
             <div class="modal-actions">
                 <button class="tool-btn" onclick="closeAdminModal()">Annuler</button>
@@ -310,10 +327,12 @@
 
     <script>
         // Configuration & État
-        const STORAGE_KEY = "messagerie_app_state_v3";
+        const STORAGE_KEY = "messagerie_app_state_v4";
         let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
             messages: [],
             systemPrompt: "Tu es KH, un assistant personnel et confidentiel.",
+            nameHomme: "Homme",
+            nameKh: "KH",
             wheelOptions: ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"]
         };
 
@@ -364,8 +383,9 @@
         // Initialisation UI
         window.onload = function() {
             renderMessages();
-            document.getElementById("admin-btn").style.display = "block";
             document.getElementById("admin-prompt-input").value = state.systemPrompt;
+            document.getElementById("name-homme-input").value = state.nameHomme || "Homme";
+            document.getElementById("name-kh-input").value = state.nameKh || "KH";
             updateCageDisplay();
             setupWheel();
         };
@@ -379,7 +399,7 @@
                 if(msg.role !== 'system') {
                     const nameDiv = document.createElement("div");
                     nameDiv.className = "sender-name";
-                    nameDiv.innerText = msg.role === 'homme' ? 'Homme' : 'KH';
+                    nameDiv.innerText = msg.role === 'homme' ? (state.nameHomme || "Homme") : (state.nameKh || "KH");
                     div.appendChild(nameDiv);
                 }
                 const textDiv = document.createElement("div");
@@ -409,7 +429,6 @@
             saveState();
             renderMessages();
 
-            // Indicateur "En train de répondre"
             const loadingId = 'loading_' + Date.now();
             state.messages.push({ role: 'kh', text: "IA est en train de répondre...", id: loadingId });
             renderMessages();
@@ -452,7 +471,17 @@
             }
         }
 
-        // Modals Admin & Outils
+        // Modals Gestion
+        function openNamesModal() { document.getElementById("names-modal").style.display = "flex"; }
+        function closeNamesModal() { document.getElementById("names-modal").style.display = "none"; }
+        function saveNames() {
+            state.nameHomme = document.getElementById("name-homme-input").value.trim() || "Homme";
+            state.nameKh = document.getElementById("name-kh-input").value.trim() || "KH";
+            saveState();
+            renderMessages();
+            closeNamesModal();
+        }
+
         function openAdminModal() { document.getElementById("admin-modal").style.display = "flex"; }
         function closeAdminModal() { document.getElementById("admin-modal").style.display = "none"; }
         function saveAdminPrompt() {
