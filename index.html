@@ -249,18 +249,6 @@
             justify-content: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
-
-        /* Style exercice de recopie */
-        .punish-target-box {
-            background-color: #fef2f2;
-            border: 1px solid #fca5a5;
-            color: #991b1b;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            text-align: center;
-            user-select: none; /* Empêche le copier-coller pour forcer la frappe */
-        }
     </style>
 </head>
 <body>
@@ -274,7 +262,6 @@
             <button class="tool-btn" onclick="openCageModal()">⏳ Chrono : <span id="cage-timer-label">00:00:00</span></button>
             <button class="tool-btn" onclick="openWheelModal()">🎡 Roue</button>
             <button class="tool-btn" onclick="openCardsModal()">🃏 Cartes</button>
-            <button class="tool-btn" onclick="openCopyModal()">✍️ Recopie</button>
             <button class="tool-btn" onclick="openNamesModal()">✏️ Noms</button>
             <button class="tool-btn danger-btn" onclick="clearChat()">🗑️ Effacer</button>
             <button class="tool-btn" onclick="openAdminModal()">⚙️ Config</button>
@@ -287,43 +274,6 @@
         <div class="input-wrapper">
             <textarea id="user-input" placeholder="Écrivez votre message..." rows="1"></textarea>
             <button id="send-btn" onclick="sendMessage()">Envoyer</button>
-        </div>
-    </div>
-
-    <!-- Modal Exercice de Recopie / Punition -->
-    <div id="copy-modal" class="modal">
-        <div class="modal-content">
-            <h3>Exercice de Recopie & Discipline</h3>
-            
-            <label style="font-size:0.85rem; color:#666;">Phrase imposée :</label>
-            <div class="punish-target-box" id="copy-target-phrase">Je dois obéir sans hésiter et avec une précision parfaite.</div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
-                <span style="font-size:0.85rem; font-weight:bold;">Objectif : <span id="copy-repeat-target">5</span> fois</span>
-                <span style="font-size:0.85rem; font-weight:bold; color:var(--primary-color);">Progression : <span id="copy-current-count">0</span> / <span id="copy-total-needed">5</span></span>
-            </div>
-
-            <label style="font-size:0.85rem; margin-top:10px;">Zone de saisie (Strict : zéro faute tolérée) :</label>
-            <input type="text" id="copy-input-field" placeholder="Tapez la phrase exacte ici..." style="padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; width: 100%;" oninput="checkCopyProgress()" onpaste="return false;">
-            
-            <div id="copy-feedback" style="font-size:0.85rem; font-weight:bold; height:20px; text-align:center;"></div>
-
-            <details style="width: 100%; margin-top: 5px;">
-                <summary style="cursor: pointer; font-size: 0.85rem; color: #666;">Configurer la phrase et le nombre de répétitions</summary>
-                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
-                    <input type="text" id="custom-copy-phrase" placeholder="Nouvelle phrase imposée..." style="padding:5px; border:1px solid var(--border-color); border-radius:4px;">
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <label style="font-size:0.85rem;">Nombre de fois :</label>
-                        <input type="number" id="custom-copy-count" value="5" min="1" max="50" style="width:60px; padding:5px; border:1px solid var(--border-color); border-radius:4px;">
-                        <button class="tool-btn" onclick="saveCustomCopySettings()">Appliquer</button>
-                    </div>
-                </div>
-            </details>
-
-            <div class="modal-actions" style="margin-top: 15px; justify-content: space-between;">
-                <button class="tool-btn" onclick="sendCopyResultToChat()" id="send-copy-btn" disabled style="opacity: 0.5;">Insérer dans le chat</button>
-                <button class="tool-btn" onclick="closeCopyModal()">Fermer</button>
-            </div>
         </div>
     </div>
 
@@ -436,10 +386,10 @@
 
     <script>
         // Configuration & État
-        const STORAGE_KEY = "messagerie_app_state_v7";
+        const STORAGE_KEY = "messagerie_app_state_v8";
         let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
             messages: [],
-            systemPrompt: "Tu es KH, un assistant personnel et confidentiel.",
+            systemPrompt: "Tu es KH, un assistant personnel et confidentiel. Tu as la capacité de contrôler certains outils de l'application en incluant des balises secrètes dans tes réponses lorsque c'est pertinent : [START_CAGE] pour lancer le chrono, [PAUSE_CAGE] pour le mettre en pause, [SPIN_WHEEL] pour lancer la roue, ou [DRAW_CARD] pour piocher une carte mystère.",
             nameHomme: "Homme",
             nameKh: "KH",
             isVirtualKh: false,
@@ -458,9 +408,7 @@
                 "Défi : Répondre uniquement par 'Oui' ou 'Non'",
                 "Gage : Photo de la clé cachée",
                 "Récompense : Carte Joker offerte"
-            ],
-            copyPhrase: "Je dois obéir sans hésiter et avec une précision parfaite.",
-            copyRepeatTarget: 5
+            ]
         };
 
         let cageState = JSON.parse(localStorage.getItem("cage_timer_v1")) || {
@@ -469,7 +417,6 @@
             lastTimestamp: Date.now()
         };
 
-        let currentCopyCount = 0;
         let lastDrawnCard = "";
 
         // Horloge globale
@@ -521,7 +468,6 @@
             updateCageDisplay();
             setupWheel();
             setupCardsEditor();
-            initCopyGameUI();
         };
 
         function renderMessages() {
@@ -562,6 +508,46 @@
                 saveState();
                 renderMessages();
             }
+        }
+
+        // Interception des commandes de l'IA pour piloter les outils
+        function processAiCommands(responseText) {
+            let cleanText = responseText;
+
+            // 1. Contrôle du Chrono
+            if (cleanText.includes("[START_CAGE]")) {
+                startCageTimer();
+                cleanText = cleanText.replace("[START_CAGE]", "").trim();
+                state.messages.push({ role: 'system', text: "⏳ [Action automatique de l'IA] : Le chronomètre de cage a été démarré." });
+            }
+            if (cleanText.includes("[PAUSE_CAGE]")) {
+                pauseCageTimer();
+                cleanText = cleanText.replace("[PAUSE_CAGE]", "").trim();
+                state.messages.push({ role: 'system', text: "⏳ [Action automatique de l'IA] : Le chronomètre de cage a été mis en pause." });
+            }
+
+            // 2. Lancement de la Roue
+            if (cleanText.includes("[SPIN_WHEEL]")) {
+                cleanText = cleanText.replace("[SPIN_WHEEL]", "").trim();
+                // Ouvre la roue et lance l'animation automatiquement
+                openWheelModal();
+                setTimeout(() => { spinWheel(); }, 500);
+                state.messages.push({ role: 'system', text: "🎡 [Action automatique de l'IA] : La roue de la chance a été lancée !" });
+            }
+
+            // 3. Tirage d'une Carte Mystère
+            if (cleanText.includes("[DRAW_CARD]")) {
+                cleanText = cleanText.replace("[DRAW_CARD]", "").trim();
+                if (state.cards && state.cards.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * state.cards.length);
+                    const drawn = state.cards[randomIndex];
+                    openCardsModal();
+                    document.getElementById("card-display-box").innerText = drawn;
+                    state.messages.push({ role: 'system', text: `🃏 [Action automatique de l'IA] : Carte mystère tirée -> ${drawn}` });
+                }
+            }
+
+            return cleanText;
         }
 
         // Envoi message API Gemini
@@ -614,6 +600,9 @@
                     aiResponseText = `⚠️ Erreur technique (${response.status}). Vérifiez votre clé API.`;
                 }
 
+                // Traiter les commandes automatiques de l'IA
+                aiResponseText = processAiCommands(aiResponseText);
+
                 state.messages = state.messages.filter(m => m.id !== loadingId);
                 state.messages.push({ role: 'kh', text: aiResponseText });
                 saveState();
@@ -624,93 +613,6 @@
                 state.messages.push({ role: 'kh', text: "⚠️ Erreur de connexion réseau." });
                 saveState();
                 renderMessages();
-            }
-        }
-
-        // --- Logique du jeu de Recopie / Discipline ---
-        function openCopyModal() {
-            document.getElementById("copy-modal").style.display = "flex";
-            initCopyGameUI();
-        }
-        function closeCopyModal() { document.getElementById("copy-modal").style.display = "none"; }
-
-        function initCopyGameUI() {
-            document.getElementById("copy-target-phrase").innerText = state.copyPhrase;
-            document.getElementById("copy-repeat-target").innerText = state.copyRepeatTarget;
-            document.getElementById("copy-total-needed").innerText = state.copyRepeatTarget;
-            document.getElementById("custom-copy-phrase").value = state.copyPhrase;
-            document.getElementById("custom-copy-count").value = state.copyRepeatTarget;
-            resetCopyProgress();
-        }
-
-        function resetCopyProgress() {
-            currentCopyCount = 0;
-            document.getElementById("copy-current-count").innerText = "0";
-            document.getElementById("copy-input-field").value = "";
-            document.getElementById("copy-feedback").innerText = "";
-            document.getElementById("send-copy-btn").disabled = true;
-            document.getElementById("send-copy-btn").style.opacity = "0.5";
-        }
-
-        function checkCopyProgress() {
-            const inputField = document.getElementById("copy-input-field");
-            const feedback = document.getElementById("copy-feedback");
-            const typedText = inputField.value;
-            const targetPhrase = state.copyPhrase;
-
-            // Vérification en direct
-            if (!targetPhrase.startsWith(typedText)) {
-                // Faute de frappe détectée -> Réinitialisation complète !
-                resetCopyProgress();
-                feedback.style.color = "#dc2626";
-                feedback.innerText = "❌ FAUTE DE FRAPPE ! Retour à 0 !";
-                return;
-            }
-
-            // Si la phrase exacte est complétée
-            if (typedText === targetPhrase) {
-                currentCopyCount++;
-                document.getElementById("copy-current-count").innerText = currentCopyCount;
-                inputField.value = "";
-                
-                if (currentCopyCount >= state.copyRepeatTarget) {
-                    feedback.style.color = "#16a34a";
-                    feedback.innerText = "🎉 EXERCICE RÉUSSI SANS FAUTE !";
-                    document.getElementById("send-copy-btn").disabled = false;
-                    document.getElementById("send-copy-btn").style.opacity = "1";
-                    inputField.disabled = true;
-                } else {
-                    feedback.style.color = "#2563eb";
-                    feedback.innerText = `✅ Ligne validée ! Encore ${state.copyRepeatTarget - currentCopyCount} fois.`;
-                }
-            } else {
-                feedback.style.color = "#6b7280";
-                feedback.innerText = "Frappe en cours... Précision exigée.";
-            }
-        }
-
-        function saveCustomCopySettings() {
-            const phrase = document.getElementById("custom-copy-phrase").value.trim();
-            const count = parseInt(document.getElementById("custom-copy-count").value);
-            if (phrase && count > 0) {
-                state.copyPhrase = phrase;
-                state.copyRepeatTarget = count;
-                saveState();
-                initCopyGameUI();
-                document.getElementById("copy-input-field").disabled = false;
-                alert("Nouvelle règle enregistrée !");
-            }
-        }
-
-        function sendCopyResultToChat() {
-            if (currentCopyCount >= state.copyRepeatTarget) {
-                state.messages.push({ 
-                    role: 'system', 
-                    text: `✍️ Exercice de discipline accompli : la phrase « ${state.copyPhrase} » a été rédigée ${state.copyRepeatTarget} fois sans la moindre faute de frappe.` 
-                });
-                saveState();
-                renderMessages();
-                closeCopyModal();
             }
         }
 
